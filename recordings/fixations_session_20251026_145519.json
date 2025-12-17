@@ -1,0 +1,76 @@
+{
+    "edf_file": "0001148.edf",
+    "session_file": "session_20251026_145519.json",
+    "fixations": [
+        {
+            "start_time": 1761472154.376763,
+            "end_time": 1761472154.591272,
+            "duration": 0.2145090103149414,
+            "x": 4.730947066326531,
+            "y": 2214.173461265409,
+            "word": null,
+            "channel": [
+                "F8",
+                "F7"
+            ],
+            "num_points": 8,
+            "speech_meta": null
+        },
+        {
+            "start_time": 1761472154.6173625,
+            "end_time": 1761472154.763993,
+            "duration": 0.14663052558898926,
+            "x": 4.9477395124716566,
+            "y": 2048.584249438863,
+            "word": null,
+            "channel": [
+                "F7",
+                "F8"
+            ],
+            "num_points": 6,
+            "speech_meta": null
+        },
+        {
+            "start_time": 1761472154.7976503,
+            "end_time": 1761472154.9508152,
+            "duration": 0.15316486358642578,
+            "x": 4.548256802721089,
+            "y": 2100.789715236395,
+            "word": null,
+            "channel": [
+                "F8",
+                "F7"
+            ],
+            "num_points": 6,
+            "speech_meta": null
+        },
+        {
+            "start_time": 1761472155.0742574,
+            "end_time": 1761472155.3446414,
+            "duration": 0.2703840732574463,
+            "x": 5.1493409863945585,
+            "y": 1936.1793558935526,
+            "word": null,
+            "channel": [
+                "O2",
+                "F7"
+            ],
+            "num_points": 10,
+            "speech_meta": null
+        },
+        {
+            "start_time": 1761472155.3737483,
+            "end_time": 1761472155.6174219,
+            "duration": 0.24367356300354004,
+            "x": 5.136408730158731,
+            "y": 1968.6446299363924,
+            "word": null,
+            "channel": [
+                "F7",
+                "O2"
+            ],
+            "num_points": 9,
+            "speech_meta": null
+        }
+    ]
+}

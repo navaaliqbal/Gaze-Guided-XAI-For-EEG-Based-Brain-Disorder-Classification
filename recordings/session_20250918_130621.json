@@ -1,0 +1,11 @@
+{
+    "session": [
+        {
+            "time_window": 10,
+            "time_window_start": 1160,
+            "start_time": 1758182603.9875088,
+            "end_time": 1758182781.8547873,
+            "gaze_data": []
+        }
+    ]
+}

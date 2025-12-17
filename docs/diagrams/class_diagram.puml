@@ -1,0 +1,100 @@
+@startuml
+title Class Diagram - Gaze+EEG Viewer (simplified)
+
+' Application GUI
+class MainWindow {
+  - canvas: EDFPlotCanvas
+  - gaze_overlay: GazeOverlay
+  - gaze_thread: GazeTrackingThread
+  - speech_thread: SpeechRecognitionThread
+  - gaze_history: deque
+  - session_data: list
+  - session_recording_active: bool
+  + open_edf(path)
+  + open_heatmap(path)
+  + toggle_gaze_tracking(checked)
+  + process_gaze(ts,x,y)
+  + save_session_data()
+}
+
+class MetadataDialog
+class ChannelSelectorDialog {
+  + get_selected(): list
+}
+
+' Plotting / Visualization
+class EDFPlotCanvas {
+  - fig, ax
+  - signals: List[numpy.ndarray]
+  - labels: List[str]
+  - sample_rate: float
+  - current_time: float
+  - time_window: float
+  - selected_channels: List[str]
+  - mask_buffer: ndarray
+  + load_edf(path)
+  + plot_current_window()
+  + draw_heatmap()
+  + make_channel_mask(start_idx,end_idx,visible_channels,offset)
+  + encode_color(idx, debug=False)
+  + decode_channel_from_color(color)
+}
+
+class GazeOverlay {
+  - visible: bool
+  + toggle_gaze(on:bool)
+  + update_position(x,y)
+}
+
+' Threads
+class GazeTrackingThread <<Thread>> {
+  + run()
+  + stop()
+  -- emits: newGaze(timestamp,x,y)
+}
+
+class SpeechRecognitionThread <<Thread>> {
+  + run()
+  + stop()
+  -- emits: newSpeechWord(payload)
+}
+
+' Utilities / Analysis
+class EEGViewer {
+  - signals, labels, sample_rate
+  + plot_current_window()
+  + get_fixations_in_current_window()
+  + create_heatmap_for_window()
+}
+
+class EEGViewerWithSimulatedGaze {
+  + start_simulation()
+}
+
+' Tobii SDK (wrapped modules)
+class EyeTracker {
+  + start_stream()
+  + stop_stream()
+  + calibrate()
+}
+
+' Relationships
+MainWindow "1" --> "1" EDFPlotCanvas : owns
+MainWindow "1" --> "1" GazeOverlay : owns
+MainWindow "1" --> "0..1" GazeTrackingThread : spawns
+MainWindow "1" --> "0..1" SpeechRecognitionThread : spawns
+EDFPlotCanvas "1" o-- "*" EEGViewer : uses
+GazeTrackingThread ..> MainWindow : emits events
+SpeechRecognitionThread ..> MainWindow : emits events
+MainWindow ..> EyeTracker : calls calibrate / stream
+
+note right of EDFPlotCanvas
+  - Heatmap generation via KDE/gaussian_filter
+  - Mask buffer for gaze->channel mapping
+end note
+
+note left of MainWindow
+  - Session controller: aligns timestamps across EEG/gaze/speech
+end note
+
+@enduml

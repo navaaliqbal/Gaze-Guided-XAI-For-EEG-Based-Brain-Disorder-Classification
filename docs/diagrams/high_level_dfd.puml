@@ -1,0 +1,44 @@
+@startuml
+title High-level DFD - Gaze+EEG Viewer
+actor User
+
+rectangle "MainWindow \n(Session Controller)" as MW
+rectangle "EDFPlotCanvas \n(EEG Viewer)" as EP
+database "EDF Files (edf/)" as EDFDS
+database "Fixation JSON / Recordings (recordings/)" as REC
+rectangle "GazeTrackingThread" as GZ
+rectangle "SpeechRecognitionThread (Vosk)" as SP
+
+User -> MW: Open EDF / Load Session
+MW -> EDFDS: request EDF file path
+MW -> EP: load_edf(file_path)
+EP -> EDFDS: read EDF via pyedflib (signals, labels, sample_rate)
+EP --> MW: ready (signals loaded)
+
+User -> MW: Start Recording
+MW -> GZ: spawn/start gaze thread
+GZ --> MW: stream gaze events (timestamp,x,y)
+MW -> SP: spawn/start speech thread
+SP --> MW: stream word events (word,start,end)
+
+MW -> REC: save session JSON (gaze, speech, meta)
+EP -> REC: load heatmap / fixations
+EP -> EP: generate heatmap (KDE / smoothing)
+EP --> MW: render overlay
+
+note right of MW
+  Responsibilities:
+  - session coordination
+  - timestamp alignment across EEG/gaze/speech
+  - start/stop threads, save/load sessions
+end note
+
+note left of EP
+  Responsibilities:
+  - EDF reading (pyedflib)
+  - plotting EEG slices
+  - heatmap overlay (KDE / gaussian_filter)
+  - mask buffer for gaze->channel mapping
+end note
+
+@enduml
