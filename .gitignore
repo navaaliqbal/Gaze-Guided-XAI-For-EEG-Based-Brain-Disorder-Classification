@@ -1,0 +1,14 @@
+*.png
+*.avi
+*.csv
+*.pyc
+**/*.pyc
+.coverage
+.pytest_cache/
+__pycache__/
+test_results.log
+tempCodeRunnerFile.py
+np_data/*
+
+.venv/
+recordings/*.json

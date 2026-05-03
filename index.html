@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>EEG + Gaze Annotation</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+      header {
+        background: #0a3d62;
+        color: white;
+        padding: 0.5rem 1rem;
+        display: flex;
+        align-items: center;
+      }
+      header input {
+        margin-left: 1rem;
+      }
+      #viewer {
+        flex: 1;
+        position: relative;
+        background: #f4f4f4;
+      }
+      .annotation {
+        position: absolute;
+        border: 2px solid rgba(255, 0, 0, 0.8);
+        pointer-events: none;
+      }
+      footer {
+        padding: 0.5rem 1rem;
+        background: #eee;
+        display: flex;
+        justify-content: space-between;
+      }
+      button {
+        padding: 0.5rem 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1 style="margin: 0; font-size: 1.2rem">EEG + Gaze Annotation</h1>
+      <input type="file" id="edfFile" accept=".edf" />
+      <button id="exportBtn" >Export Annotations</button>
+    </header>
+    <div id="viewer"></div>
+    <footer>
+      <div>Status: <span id="status">waiting for EDF</span></div>
+      <div>Corners picked: <span id="cornerCount">0</span>/2</div>
+    </footer>
+
+    <!-- EDF.js (download & build from https://github.com/aramis-lab/EDF.js ) -->
+    <!-- <script src="edfjs.min.js"></script> -->
+    <script src="https://cdn.jsdelivr.net/npm/edfjs@latest/dist/edf.min.js"></script>
+
+    <script>
+      (function () {
+        // UI refs
+        const fileInput = document.getElementById("edfFile");
+        const statusEl = document.getElementById("status");
+        const cornerCount = document.getElementById("cornerCount");
+        const exportBtn = document.getElementById("exportBtn");
+        const viewerDiv = document.getElementById("viewer");
+
+        // State
+        let viewer = null;
+        let gazeBuffer = [];
+        const DWELL_RADIUS = 30; // px
+        const DWELL_TIME = 300; // ms
+        let lastCorner = [];
+        const annotations = [];
+
+        // Step 1: Load EDF & init EDF.js viewer
+        fileInput.addEventListener("change", async (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          statusEl.textContent = "loading EDF...";
+          const ab = await file.arrayBuffer();
+          // initialize the EDF.js viewer
+          viewer = new edf.EdfViewer({
+            container: viewerDiv,
+            data: ab,
+            width: viewerDiv.clientWidth,
+            height: viewerDiv.clientHeight,
+          });
+          statusEl.textContent = "EDF loaded — awaiting gaze";
+          exportBtn.disabled = false;
+        });
+
+        // Step 2: Connect to local gaze‐bridge WebSocket
+        const ws = new WebSocket("ws://100.87.72.127:3000");
+        ws.onopen = () =>
+          (statusEl.textContent = "WebSocket open, waiting for gaze");
+        ws.onerror = () => (statusEl.textContent = "WebSocket error");
+        ws.onclose = () => (statusEl.textContent = "WebSocket closed");
+        ws.onmessage = (msg) => {
+          // expecting JSON: { x:…, y:…, t:… }
+          const g = JSON.parse(msg.data);
+          handleGaze(g.x, g.y, g.t);
+        };
+
+        // Step 3: Dwell detection
+        function handleGaze(x, y, t) {
+          gazeBuffer.push({ x, y, t });
+          // prune old
+          gazeBuffer = gazeBuffer.filter((pt) => t - pt.t < DWELL_TIME);
+          // compute centroid of last points
+          const cx =
+            gazeBuffer.reduce((s, p) => s + p.x, 0) / gazeBuffer.length;
+          const cy =
+            gazeBuffer.reduce((s, p) => s + p.y, 0) / gazeBuffer.length;
+          const maxDist = Math.max(
+            ...gazeBuffer.map((p) => Math.hypot(p.x - cx, p.y - cy))
+          );
+          if (maxDist < DWELL_RADIUS && gazeBuffer.length > 3) {
+            // dwell detected
+            registerCorner(cx, cy);
+            gazeBuffer = []; // reset
+          }
+        }
+
+        // Step 4: Corner registration & overlay
+        function registerCorner(x, y) {
+          if (!viewer) return;
+          lastCorner.push({ x, y });
+          cornerCount.textContent = lastCorner.length;
+          statusEl.textContent = `Corner ${lastCorner.length} picked`;
+          if (lastCorner.length === 2) {
+            drawRect(lastCorner[0], lastCorner[1]);
+            saveAnnotation(lastCorner[0], lastCorner[1]);
+            lastCorner = [];
+            cornerCount.textContent = 0;
+            statusEl.textContent = "Ready for next annotation";
+          }
+        }
+
+        function drawRect(c1, c2) {
+          const left = Math.min(c1.x, c2.x);
+          const top = Math.min(c1.y, c2.y);
+          const width = Math.abs(c2.x - c1.x);
+          const height = Math.abs(c2.y - c1.y);
+          const div = document.createElement("div");
+          div.classList.add("annotation");
+          div.style.left = left + "px";
+          div.style.top = top + "px";
+          div.style.width = width + "px";
+          div.style.height = height + "px";
+          viewerDiv.appendChild(div);
+        }
+
+        // Step 5: Save EEG coordinates
+        function saveAnnotation(p1, p2) {
+          // EDF.js coordinate conversion API
+          // these functions exist in EDF.js vX+ — adjust if needed
+          const t1 = viewer.getTimeFromPixel(p1.x),
+            ch1 = viewer.getChannelFromPixel(p1.y),
+            t2 = viewer.getTimeFromPixel(p2.x),
+            ch2 = viewer.getChannelFromPixel(p2.y);
+          annotations.push({ t1, ch1, t2, ch2, pickedAt: Date.now() });
+        }
+
+        // Step 6: Export
+        exportBtn.addEventListener("click", () => {
+          const blob = new Blob([JSON.stringify(annotations, null, 2)], {
+            type: "application/json",
+          });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "annotations.json";
+          a.click();
+          URL.revokeObjectURL(url);
+        });
+
+        // resize viewer on window change
+        window.addEventListener("resize", () => {
+          if (viewer)
+            viewer.resize(viewerDiv.clientWidth, viewerDiv.clientHeight);
+        });
+      })();
+    </script>
+  </body>
+</html>

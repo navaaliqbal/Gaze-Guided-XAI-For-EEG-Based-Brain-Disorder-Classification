@@ -1,0 +1,38 @@
+[
+  {
+    "timestamp": 1748864124230,
+    "bbox": {
+      "x": 171.16785,
+      "y": 341.78633999999994,
+      "width": 100,
+      "height": 100
+    },
+    "channelCount": 5,
+    "channelNames": [
+      "O2",
+      "F7",
+      "F8",
+      "T3",
+      "T4"
+    ],
+    "type": "normal"
+  },
+  {
+    "timestamp": 1748864210256,
+    "bbox": {
+      "x": 628.14042,
+      "y": 286.67142,
+      "width": 100,
+      "height": 100
+    },
+    "channelCount": 5,
+    "channelNames": [
+      "P4",
+      "O1",
+      "O2",
+      "F7",
+      "F8"
+    ],
+    "type": "abnormal"
+  }
+]

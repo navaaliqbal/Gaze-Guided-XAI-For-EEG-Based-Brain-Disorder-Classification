@@ -1,0 +1,65 @@
+[
+  {
+    "timestamp": 1748866078561,
+    "bbox": {
+      "x": 586.5849,
+      "y": 349.664296,
+      "width": 50,
+      "height": 50
+    },
+    "channelCount": 3,
+    "channelNames": [
+      "O2",
+      "F7",
+      "F8"
+    ],
+    "type": "abnormal"
+  },
+  {
+    "timestamp": 1748866108306,
+    "bbox": {
+      "x": 1343.4872599999999,
+      "y": 529.993904,
+      "width": 50,
+      "height": 50
+    },
+    "channelCount": 2,
+    "channelNames": [
+      "FZ",
+      "PZ"
+    ],
+    "type": "normal"
+  },
+  {
+    "timestamp": 1748866125627,
+    "bbox": {
+      "x": 693.21521,
+      "y": 148.454676,
+      "width": 50,
+      "height": 50
+    },
+    "channelCount": 3,
+    "channelNames": [
+      "F3",
+      "F4",
+      "C3"
+    ],
+    "type": "normal"
+  },
+  {
+    "timestamp": 1748866141026,
+    "bbox": {
+      "x": 1199.31392,
+      "y": 511.55448,
+      "width": 50,
+      "height": 50
+    },
+    "channelCount": 3,
+    "channelNames": [
+      "T6",
+      "FZ",
+      "PZ"
+    ],
+    "type": "normal"
+  }
+]

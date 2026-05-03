@@ -1,0 +1,18 @@
+{
+  "admin": {
+    "password": "admin2024",
+    "role": "admin"
+  },
+  "dr.smith": {
+    "password": "neuro2024",
+    "role": "user"
+  },
+  "tech.jones": {
+    "password": "eeg2024",
+    "role": "user"
+  },
+  "amna": {
+    "password": "hello123",
+    "role": "user"
+  }
+}

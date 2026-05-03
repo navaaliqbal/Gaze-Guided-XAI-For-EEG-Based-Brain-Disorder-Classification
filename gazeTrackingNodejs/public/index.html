@@ -1,0 +1,2498 @@
+<!-- This work is licensed under a Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License --><!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="author" content="Bilal Zonjy" />
+    <meta
+      name="keywords"
+      content="EDF,EDF Viewer, JavaScript,Plotly.js,moment.js,jquery,bootstrap,HTML, CSS,"
+    />
+    <meta name="description" content="edf Viewer" />
+    <title>EDF Gaze Annotator</title>
+    <link rel="stylesheet" type="text/css" href="css/reset.css" />
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="css/bootstrap-glyphicons.css"
+    />
+    <link rel="stylesheet" type="text/css" href="css/bootstrap.min.css" />
+    <link rel="stylesheet" type="text/css" href="css/style.css" />
+    <style>
+      /* Make the container position:relative so child <canvas> can be positioned on top */
+      #gazeContainer {
+        position: relative;
+        width: 800px; /* or whatever width you need */
+        height: 600px; /* or whatever height you need */
+        border: 1px solid #aaa;
+        overflow: hidden;
+      }
+
+      /* The canvas sits absolutely at top-left of #gazeContainer */
+      #gazeCanvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 999; /* ensures it's above any other elements in the same div */
+      }
+
+      /* Example background element inside the same container */
+      .background-element {
+        position: absolute;
+        width: 100px;
+        height: 100px;
+        background: rgba(0, 0, 255, 0.2);
+        top: 50px;
+        left: 200px;
+      }
+
+      /* EEG Control Panel Styles */
+      .eeg-control-panel {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+        background-color: rgba(0, 0, 0, 0.5);
+        padding: 10px;
+        border-radius: 5px;
+        display: flex;
+        gap: 10px;
+      }
+
+      .eeg-control-panel button {
+        padding: 8px;
+        border: none;
+        background-color: rgba(255, 255, 255, 0.9);
+      }
+
+      .eeg-control-panel button:hover {
+        background-color: rgba(255, 255, 255, 1);
+      }
+
+      /* Fullscreen styles */
+      .fullscreen-eeg {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        z-index: 9999 !important;
+        background: white !important;
+        overflow-y: auto !important;
+        padding-top: 20px !important;
+      }
+
+      .fullscreen-eeg #eegControlPanel {
+        background-color: rgba(0, 0, 0, 0.7);
+      }
+
+      /* Modal styles for fullscreen compatibility */
+      .modal {
+        z-index: 10000 !important;
+      }
+      
+      .modal-backdrop {
+        z-index: 9999 !important;
+      }
+    </style>
+  </head>
+  <body onresize="sizeChanged()">
+    <div class="myRow">
+      <div class="myWrite" id="write">Write</div>
+      <div class="myWrite" id="erase">Erase</div>
+      <div class="myWrite" id="locAnn">
+        <label>
+          Vis Pred
+          <input type="file" id="ann-input" accept=".csv" />
+        </label>
+      </div>
+      <div class="myWrite" id="truAnn">
+        <label>
+          Vis True
+          <input type="file" id="tru-input" accept=".csv" />
+        </label>
+      </div>
+    </div>
+    <div class="myModal" id="timeModal">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 class="modal-title">Update start time</h2>
+          </div>
+          <div class="modal-body">
+            <div>
+              <h3>Enter preferred starting time. Default is displayed</h3>
+              <div
+                style="
+                  border: 2px solid #c3c3c3;
+                  padding: 0px;
+                  margin: 0px;
+                  width: 142px;
+                  border-radius: 5px;
+                  padding-left: 2px;
+                "
+              >
+                <input
+                  type="number"
+                  pattern="[0-9]*"
+                  id="myHH"
+                  placeholder="HH"
+                  step="1"
+                  min="0"
+                  max="23"
+                  autocomplete="off"
+                  style="
+                    width: 40px;
+                    height: 36px;
+                    border: 0px;
+                    text-align: right;
+                  "
+                />:
+                <input
+                  type="number"
+                  pattern="[0-9]*"
+                  id="myMM"
+                  placeholder="mm"
+                  step="1"
+                  min="0"
+                  max="59"
+                  autocomplete="off"
+                  style="
+                    width: 40px;
+                    height: 36px;
+                    border: 0px;
+                    text-align: right;
+                  "
+                />:
+                <input
+                  type="number"
+                  pattern="[0-9]*"
+                  id="mySS"
+                  placeholder="ss"
+                  step="1"
+                  min="0"
+                  max="59"
+                  autocomplete="off"
+                  style="
+                    width: 35px;
+                    height: 36px;
+                    border: 0px;
+                    text-align: right;
+                  "
+                />
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <div
+              type="button"
+              class="btn btn-primary"
+              id="acceptTime"
+              data-dismiss="modal"
+              style="margin: 10px; width: 70px"
+            >
+              Ok <span class="glyphicon glyphicon-ok"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="myModal" id="writeModal">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 class="modal-title">Confirm write</h2>
+          </div>
+          <div class="modal-body">
+            <div>
+              <h3>Enter age of subject</h3>
+              <input
+                type="number"
+                name="getAge"
+                placeholder="Enter age"
+                autocomplete="off"
+              />
+              <br /><br />
+            </div>
+            <div>
+              <h3>Choose Gender</h3>
+              <input type="radio" id="gen1" name="rate" value="Male" /> Male
+              <br />
+              <input type="radio" id="gen2" name="rate" value="Female" /> Female
+              <br />
+              <input type="radio" id="gen3" name="rate" value="Other" /> Other
+              <br />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <div
+              type="button"
+              class="btn btn-primary"
+              id="acceptWrite"
+              data-dismiss="modal"
+              style="margin: 10px; width: 70px"
+            >
+              Ok <span class="glyphicon glyphicon-ok"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      class="container plotDivs"
+      style="width: 100%; height: 100%; background-color: #222222"
+    >
+      <div
+        class="row"
+        style="background-color: #222222; margin-left: 0px; margin-right: 0px"
+      >
+        <nav
+          class="navbar navbar-inverse"
+          style="
+            background-color: #222222;
+            margin-bottom: 1px;
+            padding-bottom: 5px;
+            padding-right: 10px;
+            width: 1300px;
+            margin-left: auto;
+            margin-right: auto;
+            border-color: #222222;
+          "
+        >
+          <div class="row">
+            <div class="col-sm-2">
+              <div
+                style="
+                  color: #0275d8;
+                  font-size: 20px;
+                  font-weight: bold;
+                  padding-left: 10px;
+                  padding-top: 25px;
+                "
+              >
+                EDF Gaze Annotator
+              </div>
+            </div>
+            <div class="col-sm-8" style="margin-right: 0px">
+              <div class="row" style="margin-top: 10px">
+                <div class="col-sm-8">
+                  <div class="row">
+                    <div class="col-sm-2" style="padding-right: 0px">
+                      <label
+                        class="btn-bs-file btn btn-lg btn-primary"
+                        style="
+                          height: 35px;
+                          padding-top: 5px;
+                          width: 150px;
+                          font-weight: bold;
+                          font-size: 20px;
+                        "
+                      >
+                        Open
+                        <input
+                          type="file"
+                          id="file-input"
+                          accept=".edf"
+                          class="custom-file-input"
+                        />
+                      </label>
+                    </div>
+                    <div class="col-sm-10" style="padding-left: 0px">
+                      <div
+                        id="ptname"
+                        style="
+                          background-color: #ffffff;
+                          height: 35px;
+                          margin-left: 0px;
+                          padding-right: 10px;
+                          padding-left: 5px;
+                          font-size: 14px;
+                          padding-top: 7px;
+                        "
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  class="col-sm-2"
+                  style="margin-right: 0px; padding-left: 5px"
+                >
+                  <div
+                    class="btn-primary"
+                    style="
+                      height: 35px;
+                      margin: 0px;
+                      border-radius: 5px;
+                      width: 112px;
+                    "
+                  >
+                    <div
+                      class="btn-primary"
+                      id="montage"
+                      style="
+                        width: 75px;
+                        height: 35px;
+                        position: absolute;
+                        left: 5px;
+                        padding-left: 7px;
+                        padding-top: 7px;
+                        border-radius: 5px;
+                      "
+                    >
+                      Montage :
+                    </div>
+                    <div
+                      class="dropdown-toggle btn-primary"
+                      aria-pressed="false"
+                      style="
+                        width: 36px;
+                        height: 35px;
+                        position: absolute;
+                        left: 80px;
+                        padding-left: 7px;
+                        padding-top: 7px;
+                        border-radius: 5px;
+                      "
+                      data-toggle="dropdown"
+                    >
+                      <span id="general_montage_num">1 </span
+                      ><span class="caret"></span>
+                    </div>
+                    <ul
+                      class="dropdown-menu"
+                      style="position: absolute; left: -20px; padding: 25px"
+                    >
+                      <div class="btn-group" data-toggle="buttons">
+                        <li style="width: 120px">
+                          <label
+                            class="btn btn-primary active montageSelect Montage1"
+                          >
+                            <input
+                              type="radio"
+                              name="Montage"
+                              class="montageSelect Montage1"
+                              autocomplete="off"
+                              checked=""
+                            />  Montage 1
+                          </label>
+                        </li>
+                        <li style="width: 120px">
+                          <label
+                            class="btn btn-primary active montageSelect Montage2"
+                          >
+                            <input
+                              type="radio"
+                              name="Montage"
+                              class="montageSelect Montage2"
+                              autocomplete="off"
+                            />  Montage 2
+                          </label>
+                        </li>
+                        <li style="width: 120px">
+                          <label
+                            class="btn btn-primary active montageSelect Montage3"
+                          >
+                            <input
+                              type="radio"
+                              name="Montage"
+                              class="montageSelect Montage3"
+                              autocomplete="off"
+                            />  Montage 3
+                          </label>
+                        </li>
+                        <li style="width: 120px">
+                          <label
+                            class="btn btn-primary active montageSelect Montage4"
+                          >
+                            <input
+                              type="radio"
+                              name="Montage"
+                              class="montageSelect Montage4"
+                              autocomplete="off"
+                            />  Montage 4
+                          </label>
+                        </li>
+                        <li style="width: 120px">
+                          <label
+                            class="btn btn-primary active montageSelect Montage5"
+                          >
+                            <input
+                              type="radio"
+                              name="Montage"
+                              class="montageSelect Montage5"
+                              autocomplete="off"
+                            />  Montage 5
+                          </label>
+                        </li>
+                        <li style="width: 120px">
+                          <label
+                            class="btn btn-primary active montageSelect Montage6"
+                          >
+                            <input
+                              type="radio"
+                              name="Montage"
+                              class="montageSelect Montage6"
+                              autocomplete="off"
+                            />  Montage 6
+                          </label>
+                        </li>
+                      </div>
+                    </ul>
+                  </div>
+                </div>
+                <div class="col-sm-2" style="padding-left: 0px">
+                  <div
+                    class="dropdown-toggle btn btn-primary"
+                    aria-pressed="false"
+                    style="width: 125px; height: 35px"
+                    data-toggle="dropdown"
+                  >
+                    <span>Filters </span><span class="caret"></span>
+                  </div>
+                  <ul
+                    class="dropdown-menu"
+                    style="position: absolute; left: -20px; padding-left: 20px"
+                  >
+                    <li>
+                      <div
+                        class="btn btn-primary active"
+                        role="button"
+                        aria-pressed="true"
+                        style="width: 120px; height: 35px"
+                        id="DCbtn"
+                      >
+                        <span
+                          class="glyphicon glyphicon-check"
+                          id="CDspan"
+                        ></span>
+                        Remove DC
+                      </div>
+                    </li>
+                    <li>
+                      <div
+                        class="btn btn-primary active"
+                        role="button"
+                        aria-pressed="false"
+                        style="width: 120px; height: 35px"
+                        id="_60Hz"
+                      >
+                        <span
+                          class="glyphicon glyphicon-unchecked"
+                          id="60span"
+                        ></span>
+                        60 Hz
+                      </div>
+                    </li>
+                    <li>
+                      <div
+                        class="btn btn-primary active"
+                        role="button"
+                        aria-pressed="false"
+                        style="width: 120px; height: 35px"
+                        id="_50Hz"
+                      >
+                        <span
+                          class="glyphicon glyphicon-unchecked"
+                          id="50span"
+                        ></span>
+                        50 Hz
+                      </div>
+                    </li>
+                    <li>
+                      <div
+                        class="btn btn-primary active"
+                        role="button"
+                        aria-pressed="false"
+                        style="width: 120px; height: 35px"
+                        id="_17Hz"
+                      >
+                        <span
+                          class="glyphicon glyphicon-unchecked"
+                          id="17span"
+                        ></span>
+                        17 Hz
+                      </div>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+              <div class="row" style="margin-top: 10px">
+                <div class="col-sm-3">
+                  <div
+                    class="row"
+                    style="border-radius: 5px; padding-left: 15px"
+                  >
+                    <div
+                      class="col-sm-5"
+                      style="
+                        background-color: #5cb85c;
+                        color: #ffffff;
+                        height: 35px;
+                        padding-top: 5px;
+                        border-radius: 5px;
+                        font-size: 20px;
+                        text-align: center;
+                      "
+                    >
+                      Date
+                    </div>
+                    <div class="col-sm-7" style="padding-left: 0px">
+                      <div
+                        id="DateTime"
+                        style="
+                          background-color: #ffffff;
+                          height: 35px;
+                          font-size: 20px;
+                          width: 120px;
+                          padding-top: 7px;
+                          padding-left: 5px;
+                          margin-left: 0px;
+                          border-radius: 5px;
+                        "
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-sm-6">
+                  <div class="row" style="width: 450px; margin-left: 10px">
+                    <div
+                      type="button"
+                      class="btn btn-success col-sm-2"
+                      id="previous_page"
+                      style="width: 50px; margin-left: 1px"
+                      data-toggle="tooltip"
+                      data-placement="bottom"
+                      title="Previous page"
+                    >
+                      <span class="glyphicon glyphicon-arrow-left"></span>
+                    </div>
+                    <div
+                      class="col-sm-2"
+                      id="startWindowtime"
+                      style="
+                        width: 100px;
+                        height: 35px;
+                        background-color: #ffffff;
+                        border: 2px groove #d3d3;
+                        margin-left: 1px;
+                        border-radius: 5px;
+                        font-size: 20px;
+                        padding-left: 10px;
+                        padding-top: 5px;
+                      "
+                    ></div>
+                    <div
+                      type="button"
+                      class="btn btn-success col-sm-2"
+                      id="previous_sec"
+                      style="width: 50px; margin-left: 2px"
+                      data-toggle="tooltip"
+                      data-placement="bottom"
+                      title="Move one second backward"
+                    >
+                      <span class="glyphicon glyphicon-chevron-left"></span>
+                    </div>
+                    <div
+                      type="button"
+                      class="btn btn-success col-sm-2"
+                      id="next_sec"
+                      style="width: 50px; margin-left: 10px"
+                      data-toggle="tooltip"
+                      data-placement="bottom"
+                      title="Move one second forward"
+                    >
+                      <span class="glyphicon glyphicon-chevron-right"></span>
+                    </div>
+                    <div
+                      class="col-sm-2"
+                      id="endWindowtime"
+                      style="
+                        width: 100px;
+                        height: 35px;
+                        background-color: #ffffff;
+                        border: 2px groove #d3d3;
+                        margin-left: 1px;
+                        border-radius: 5px;
+                        font-size: 20px;
+                        padding-left: 10px;
+                        padding-top: 5px;
+                      "
+                    ></div>
+                    <div
+                      type="button"
+                      class="btn btn-success col-sm-2"
+                      id="next_page"
+                      style="width: 50px; margin-left: 2px"
+                      data-toggle="tooltip"
+                      data-placement="bottom"
+                      title="Next page"
+                    >
+                      <span class="glyphicon glyphicon-arrow-right"></span>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-sm-3">
+                  <li class="dropdown" style="margin-left: 15px">
+                    <div
+                      class="dropdown-toggle btn btn-success"
+                      id="windowduratin"
+                      style="
+                        position: absolute;
+                        top: -10px;
+                        left: 2px;
+                        height: 35px;
+                      "
+                      data-toggle="dropdown"
+                    >
+                      <span>Window Duration: </span><span id="wd">7s </span
+                      ><span class="caret"></span>
+                    </div>
+                    <ul class="dropdown-menu">
+                      <div class="btn-group" data-toggle="buttons">
+                        <li>
+                          <label
+                            class="btn btn-success active windowSelect window1s"
+                          >
+                            <input
+                              type="radio"
+                              name="options"
+                              class="window1s"
+                              autocomplete="off"
+                            />
+                            1s
+                          </label>
+                        </li>
+                        <li>
+                          <label class="btn btn-success windowSelect window3s">
+                            <input
+                              type="radio"
+                              name="options"
+                              class="window3s"
+                              autocomplete="off"
+                            />
+                            3s
+                          </label>
+                        </li>
+                        <li>
+                          <label class="btn btn-success windowSelect window7s">
+                            <input
+                              type="radio"
+                              name="options"
+                              class="window7s"
+                              autocomplete="off"
+                              checked=""
+                            />
+                            7s
+                          </label>
+                        </li>
+                        <li>
+                          <label class="btn btn-success windowSelect window10s">
+                            <input
+                              type="radio"
+                              name="options"
+                              class="window10s"
+                              autocomplete="off"
+                            />
+                            10s
+                          </label>
+                        </li>
+                        <li>
+                          <label class="btn btn-success windowSelect window15s">
+                            <input
+                              type="radio"
+                              name="options"
+                              class="window15s"
+                              autocomplete="off"
+                            />
+                            15s
+                          </label>
+                        </li>
+                        <li>
+                          <label class="btn btn-success windowSelect window30s">
+                            <input
+                              type="radio"
+                              name="options"
+                              class="window30s"
+                              autocomplete="off"
+                            />
+                            30s
+                          </label>
+                        </li>
+                        <li>
+                          <label class="btn btn-success windowSelect window60s">
+                            <input
+                              type="radio"
+                              name="options"
+                              class="window60s"
+                              autocomplete="off"
+                            />
+                            60s
+                          </label>
+                        </li>
+                      </div>
+                    </ul>
+                  </li>
+                </div>
+              </div>
+            </div>
+            <div class="col-sm-2" style="padding: 0px">
+              <div
+                class="row"
+                style="margin-top: 10px; padding: 0px; margin-left: 0px"
+              >
+                <div class="col-sm-6" style="padding-left: 0px">
+                  <div
+                    class="btn btn-primary active"
+                    role="button"
+                    style="
+                      height: 35px;
+                      font-size: 15px;
+                      width: 114px;
+                      padding-left: 8px;
+                    "
+                    id="Documentationbtn"
+                  >
+                    Documentation
+                  </div>
+                </div>
+                <div class="col-sm-6" style="padding-left: 7px">
+                  <div
+                    class="btn btn-primary active"
+                    role="button"
+                    style="height: 35px"
+                    id="aboutbtn"
+                  >
+                    <span class="glyphicon glyphicon-user"></span> About
+                  </div>
+                </div>
+              </div>
+              <div class="row" style="margin-top: 10px">
+                <div class="col-sm-4" style="padding-left: 0px">
+                  <li class="dropdown" style="margin-left: 15px">
+                    <div
+                      class="dropdown-toggle btn btn-success"
+                      id="amp"
+                      style="
+                        position: absolute;
+                        top: -10px;
+                        left: 2px;
+                        height: 35px;
+                        width: 100px;
+                        padding-left: 3px;
+                      "
+                      data-toggle="dropdown"
+                    >
+                      <span>Amp: </span><span id="ampNumber">0.3 µV </span
+                      ><span class="caret"></span>
+                    </div>
+                    <ul
+                      class="dropdown-menu"
+                      style="position: absolute; left: -30px"
+                    >
+                      <div class="btn-group" data-toggle="buttons">
+                        <li style="padding-left: 30px">
+                          <label
+                            class="btn btn-success active amplitSelect amp1s"
+                            style="width: 100px"
+                          >
+                            <input
+                              type="radio"
+                              name="amplitude"
+                              class="amp1s"
+                              autocomplete="off"
+                            />0.01 µV
+                          </label>
+                        </li>
+                        <li style="padding-left: 30px">
+                          <label
+                            class="btn btn-success active amplitSelect amp2s"
+                            style="width: 100px"
+                          >
+                            <input
+                              type="radio"
+                              name="amplitude"
+                              class="amp2s"
+                              autocomplete="off"
+                            />0.02 µV
+                          </label>
+                        </li>
+                        <li style="padding-left: 30px">
+                          <label
+                            class="btn btn-success active amplitSelect amp3s"
+                            style="width: 100px"
+                          >
+                            <input
+                              type="radio"
+                              name="amplitude"
+                              class="amp3s"
+                              autocomplete="off"
+                            />0.03 µV
+                          </label>
+                        </li>
+                        <li style="padding-left: 30px">
+                          <label
+                            class="btn btn-success active amplitSelect amp5s"
+                            style="width: 100px"
+                          >
+                            <input
+                              type="radio"
+                              name="amplitude"
+                              class="amp5s"
+                              autocomplete="off"
+                            />0.05 µV
+                          </label>
+                        </li>
+                        <li style="padding-left: 30px">
+                          <label
+                            class="btn btn-success active amplitSelect amp7s"
+                            style="width: 100px"
+                          >
+                            <input
+                              type="radio"
+                              name="amplitude"
+                              class="amp7s"
+                              autocomplete="off"
+                            />0.07 µV
+                          </label>
+                        </li>
+                        <li style="padding-left: 30px">
+                          <label
+                            class="btn btn-success active amplitSelect amp10s"
+                            style="width: 100px"
+                          >
+                            <input
+                              type="radio"
+                              name="amplitude"
+                              class="amp10s"
+                              autocomplete="off"
+                            />0.10 µV
+                          </label>
+                        </li>
+                        <li style="padding-left: 30px">
+                          <label
+                            class="btn btn-success active amplitSelect amp15s"
+                            style="width: 100px"
+                          >
+                            <input
+                              type="radio"
+                              name="amplitude"
+                              class="amp15s"
+                              autocomplete="off"
+                            />0.15 µV
+                          </label>
+                        </li>
+                        <li style="padding-left: 30px">
+                          <label
+                            class="btn btn-success active amplitSelect amp20s"
+                            style="width: 100px"
+                          >
+                            <input
+                              type="radio"
+                              name="amplitude"
+                              class="amp20s"
+                              autocomplete="off"
+                            />0.20 µV
+                          </label>
+                        </li>
+                        <li style="padding-left: 30px">
+                          <label
+                            class="btn btn-success active amplitSelect amp30s"
+                            style="width: 100px"
+                          >
+                            <input
+                              type="radio"
+                              name="amplitude"
+                              class="amp30s"
+                              autocomplete="off"
+                              checked=""
+                            />0.30 µV
+                          </label>
+                        </li>
+                        <li style="padding-left: 30px">
+                          <label
+                            class="btn btn-success active amplitSelect amp50s"
+                            style="width: 100px"
+                          >
+                            <input
+                              type="radio"
+                              name="amplitude"
+                              class="amp50s"
+                              autocomplete="off"
+                            />0.50 µV
+                          </label>
+                        </li>
+                        <li style="padding-left: 30px">
+                          <label
+                            class="btn btn-success active amplitSelect amp100s"
+                            style="width: 100px"
+                          >
+                            <input
+                              type="radio"
+                              name="amplitude"
+                              class="amp100s"
+                              autocomplete="off"
+                            />1.00 µV
+                          </label>
+                        </li>
+                      </div>
+                    </ul>
+                  </li>
+                </div>
+
+                <div class="col-sm-2" style="padding-left: 0px"></div>
+                <div class="col-sm-5" style="padding-left: 0px">
+                  <div
+                    class="btn btn-success active"
+                    role="button"
+                    style="height: 35px; width: 95px"
+                    id="settings_btn"
+                  >
+                    <span class="glyphicon glyphicon-cog"></span> Settings
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </nav>
+      </div>
+      <div
+        class="row plotDivs showAtbegining"
+        id="PlotContainer "
+        style="background-color: #222222"
+      >
+        <div
+          class="FirstCol plotDivs showAtbegining"
+          id="fc"
+          style="width: 40px"
+        >
+          <div class="row plotDivs RowOne"></div>
+          <div
+            class="row plotDivs RowTwo RowTwoPlot annotaionRow"
+            id="AnnotaionName"
+            style="background-color: #222222"
+          ></div>
+          <div
+            class="row plotDivs RowTwo RowTwoPlot upperTimeRow"
+            id="UpperTimeMarkName"
+            style="background-color: #222222"
+          ></div>
+          <div class="row plotDivs RowTwo RowTwoPlot" id="EEGchName"></div>
+          <div
+            class="row plotDivs RowTwo RowTwoPlot EKGRow"
+            style="
+              border: 1px solid #5cb85c;
+              width: 1px;
+              background-color: #5cb85c;
+              width: 100%;
+            "
+          ></div>
+          <div class="row plotDivs RowTwo RowTwoPlot" id="EKGchName"></div>
+          <div
+            class="row plotDivs RowTwo RowTwoPlot OtherRow"
+            style="
+              border: 1px solid #dba436;
+              width: 1px;
+              background-color: #dba436;
+              width: 100%;
+            "
+          ></div>
+          <div class="row plotDivs RowTwo RowTwoPlot" id="OtherchName"></div>
+          <div
+            class="row plotDivs RowTwo RowTwoPlot lowerTimeMarkRow"
+            id="LowerTimeMarkName"
+            style="background-color: #222222"
+          ></div>
+        </div>
+        <div
+          class="SecondCol plotDivs showAtbegining"
+          id="mycont"
+          style="width: 100%"
+        >
+          <canvas id="gazeCanvas"></canvas>
+
+          <!-- EEG Control Panel -->
+          <div id="eegControlPanel" class="eeg-control-panel">
+            <button id="fullscreenToggle" class="btn btn-primary" title="Toggle Fullscreen (Esc)">
+              <i class="glyphicon glyphicon-fullscreen"></i>
+            </button>
+          </div>
+
+          <div class="row plotDivs RowOne">
+            <div
+              class="showAtbegining"
+              id="scroll_body"
+              style="
+                height: 12px;
+                padding-top: 1px;
+                padding-bottom: 1px;
+                background-color: #666666;
+                visibility: hidden;
+              "
+            >
+              <div
+                id="scroll_marker"
+                style="
+                  height: 10px;
+                  background-color: #d8c8bc;
+                  width: 30px;
+                  position: absolute;
+                  left: 10%;
+                "
+              ></div>
+              <input type="range" id="rangeinput" />
+            </div>
+          </div>
+          <div
+            class="row plotDivs RowTwo RowTwoPlot annotaionRow"
+            id="Annotaionplot"
+          ></div>
+          <div
+            class="row plotDivs RowTwo RowTwoPlot upperTimeRow"
+            id="UpperTimeMarkplot"
+          ></div>
+          <div class="row plotDivs RowTwo RowTwoPlot" id="EEGplot"></div>
+          <div
+            class="row plotDivs RowTwo RowTwoPlot EKGRow"
+            style="
+              border: 1px solid #5cb85c;
+              width: 1px;
+              background-color: #5cb85c;
+              width: 100%;
+            "
+          ></div>
+          <div class="row plotDivs RowTwo RowTwoPlot" id="EKGplot"></div>
+          <div
+            class="row plotDivs RowTwo RowTwoPlot OtherRow"
+            style="
+              border: 1px solid #dba436;
+              width: 1px;
+              background-color: #dba436;
+              width: 100%;
+            "
+          ></div>
+          <div class="row plotDivs RowTwo RowTwoPlot" id="Otherplot"></div>
+          <div
+            class="row plotDivs RowTwo RowTwoPlot lowerTimeMarkRow"
+            id="LowerTimeMarkplot"
+          ></div>
+        </div>
+        <div
+          class="ThirdCol plotDivs"
+          style="
+            border-right: 10px solid #222222;
+            border-bottom: 10px solid #222222;
+            padding-right: 3px;
+            background-color: #222222;
+            visibility: hidden;
+            display: none;
+          "
+        >
+          <div class="row plotDivs RowOne"></div>
+          <div
+            class="row plotDivs RowTwo"
+            id="annotaion_box"
+            style="background-color: #222222; padding-top: 3px; width: 100%"
+          >
+            <!-- annotaion table start  -->
+            <!-- annotaion header -->
+            <div
+              class="thead-inverse row"
+              style="background-color: #222222; color: #0275d8; margin: 2px"
+            >
+              <div
+                id="Annotaion_Table_Head_0"
+                class="annotaionHeader"
+                style="width: 250px"
+              >
+                <b> Annotaion<br /></b
+                ><span class="glyphicon glyphicon glyphicon-sort"></span>
+              </div>
+              <div
+                id="Annotaion_Table_Head_1"
+                class="annotaionHeader"
+                style="width: 90px"
+              >
+                <b>Clock Time</b
+                ><span class="glyphicon glyphicon glyphicon-sort"></span>
+              </div>
+            </div>
+            <!-- annotaions actual table -->
+            <div
+              id="annotaionsTableScrol"
+              style="
+                overflow: auto;
+                border: 2px solid #222222;
+                padding-right: 5px;
+                overflow-x: hidden;
+                margin-right: 3px;
+              "
+            >
+              <table
+                class="sortable table"
+                id="AnnotaionTable"
+                style="margin: 0px"
+              ></table>
+            </div>
+            <!-- annotaion search -->
+            <div class="row" style="margin: 0px; background-color: #222222">
+              <input
+                type="text"
+                id="SearchInput"
+                name="search"
+                onkeyup="SearchAnnotaion()"
+                placeholder="Search.."
+                style="
+                  padding-left: 5px;
+                  background-color: #222222;
+                  color: #0275d8;
+                  border-width: 0px;
+                "
+                autocomplete="off"
+              />
+            </div>
+            <div class="row" style="margin: 0px; background-color: #222222">
+              <label
+                class="btn-bs-file btn btn-lg btn-primary"
+                style="
+                  height: 35px;
+                  padding-top: 5px;
+                  width: 250px;
+                  font-weight: bold;
+                  font-size: 20px;
+                  color: #222222;
+                  left: 60px;
+                  background-color: #0275d8;
+                "
+                >Import Annotaions
+                <input
+                  type="file"
+                  id="import_annotations_from_file"
+                  accept=".edf"
+                  class="custom-file-input"
+                />
+              </label>
+            </div>
+            <!-- annotaion table end  -->
+          </div>
+        </div>
+      </div>
+      <div
+        class="modal fade"
+        id="loadAnnotationModule"
+        tabindex="-1"
+        role="dialog"
+        aria-labelledby="myModalLabel"
+        aria-hidden="true"
+        style="display: none"
+        data-backdrop="static"
+        data-keyboard="false"
+      >
+        <div class="modal-dialog">
+          <div
+            class="modal-content"
+            style="height: 100px; width: 400px; padding: 20px"
+          >
+            <div class="span4">
+              Loading Annotaions
+              <div class="progress">
+                <div
+                  id="loadingProgressBar"
+                  class="progress-bar"
+                  style="width: 0%"
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal fade" id="SettingsModal">
+        <div class="modal-dialog" role="document">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h2 class="modal-title">Settings</h2>
+            </div>
+            <div class="modal-body" style="padding-top: 10px">
+              <div class="row settingRow" style="margin-top: 25px">
+                <div class="col-sm-1"></div>
+                <div class="col-sm-10">
+                  <div class="settingsEdge" style="height: 80px">
+                    <div class="settingsEdgeLegand" style="width: 210px">
+                      Channel Lable Width
+                    </div>
+                    <div
+                      class="input-group"
+                      style="position: relative; left: 100px; padding: 0px"
+                    >
+                      <div
+                        style="float: left; width: 35px"
+                        type="button"
+                        class="btn btn-success btn-number"
+                        id="setting_CNW_decrease"
+                      >
+                        <span class="glyphicon glyphicon-minus"></span>
+                      </div>
+                      <div
+                        style="
+                          height: 35px;
+                          background-color: #ffffff;
+                          border: 2px groove #d3d3;
+                          padding: 0px;
+                          float: left;
+                          width: 150px;
+                        "
+                      >
+                        <div
+                          style="
+                            width: 30px;
+                            height: 31px;
+                            background-color: #686868;
+                            position: relative;
+                            left: 0px;
+                          "
+                          id="setting_CNW_slider"
+                        ></div>
+                      </div>
+                      <div
+                        style="float: left; width: 35px"
+                        type="button"
+                        class="btn btn-success btn-number"
+                        id="setting_CNW_increase"
+                      >
+                        <span class="glyphicon glyphicon-plus"></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-sm-1"></div>
+              </div>
+              <div class="row settingRow" style="margin-top: 30px">
+                <div class="col-sm-1"></div>
+                <div class="col-sm-5">
+                  <div class="settingsEdge">
+                    <div
+                      class="settingsEdgeLegand"
+                      style="width: 170px; left: 15px"
+                    >
+                      Annotaions Table
+                    </div>
+                    <label
+                      class="btn btn-success active AnnotationTblSelect SATob1"
+                      style="
+                        width: 200px;
+                        margin-bottom: 10px;
+                        text-align: left;
+                        margin-left: 7px;
+                      "
+                    >
+                      <input
+                        type="radio"
+                        name="settingAnnotaionTable"
+                        class="SATob1"
+                        autocomplete="off"
+                      />
+                      Hide
+                    </label>
+                    <label
+                      class="btn btn-success active AnnotationTblSelect SATob3"
+                      style="
+                        width: 200px;
+                        margin-bottom: 10px;
+                        text-align: left;
+                        margin-left: 7px;
+                      "
+                    >
+                      <input
+                        type="radio"
+                        name="settingAnnotaionTable"
+                        class="SATob3"
+                        autocomplete="off"
+                        checked=""
+                      />
+                      Show always
+                    </label>
+                  </div>
+                </div>
+                <div class="col-sm-5">
+                  <div class="settingsEdge" style="height: 125px">
+                    <div
+                      type="button"
+                      class="btn btn-danger"
+                      style="
+                        margin-top: 30px;
+                        margin-bottom: 10px;
+                        text-align: center;
+                        margin-left: 7px;
+                        width: 197px;
+                      "
+                      id="ResetToDefault"
+                      onclick="Reseteverything()"
+                    >
+                      Reset to default
+                    </div>
+                  </div>
+                </div>
+                <div class="col-sm-1"></div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <div
+                type="button"
+                class="btn btn-primary"
+                id="Savesetting"
+                style="margin: 10px; position: relative; left: -210px"
+                onclick="saveSettings()"
+              >
+                Save Setting <span class="glyphicon glyphicon-save"></span>
+              </div>
+              <div
+                type="button"
+                class="btn btn-primary"
+                data-dismiss="modal"
+                style="margin: 10px; position: relative; left: -40px"
+              >
+                Close
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div
+      class="modal fade"
+      id="montageModal"
+      tabindex="-1"
+      role="dialog"
+      aria-labelledby="MontageModalLabel"
+      aria-hidden="true"
+      data-keyboard="false"
+    >
+      <div class="modal-dialog" role="document">
+        <div
+          class="modal-content"
+          style="
+            overflow-y: hidden;
+            overflow-x: hidden;
+            height: 560px;
+            width: 685px;
+          "
+        >
+          <div class="modal-header" style="height: 60px">
+            <h2 class="modal-title" id="MontageModalLabel">Montage</h2>
+          </div>
+          <div class="modal-body" style="height: 460px; padding-top: 5px">
+            <div class="row" style="height: 25px">
+              <div class="col-sm-2">
+                <div
+                  style="
+                    text-align: center;
+                    margin-left: 20px;
+                    margin-top: 7px;
+                    font-size: 20px;
+                  "
+                >
+                  Channels
+                </div>
+              </div>
+              <div class="col-sm-1"></div>
+              <div class="col-sm-2">
+                <div
+                  style="
+                    text-align: center;
+                    margin-left: 10px;
+                    margin-top: 7px;
+                    font-size: 20px;
+                  "
+                  class="channel2Group"
+                >
+                  Channels
+                </div>
+              </div>
+              <div class="col-sm-2"></div>
+              <div class="col-sm-3" style="padding: 0px">
+                <div class="dropdown" style="margin-left: 15px">
+                  <button
+                    style="width: 150px; font-size: 20px"
+                    class="btn btn-default dropdown-toggle"
+                    type="button"
+                    id="montage_modal_editor"
+                    data-toggle="dropdown"
+                  >
+                    <span id="montage_modal_txt">Montage 1</span>
+                    <span class="caret"></span>
+                  </button>
+                  <ul
+                    class="dropdown-menu"
+                    role="menu"
+                    aria-labelledby="menu1"
+                    style="position: absolute; left: -5px"
+                  >
+                    <li role="presentation">
+                      <div
+                        style="
+                          width: 160px;
+                          cursor: pointer;
+                          text-align: center;
+                        "
+                        class="montage_modal_list Montage1"
+                      >
+                        Montage 1
+                      </div>
+                    </li>
+                    <li role="presentation">
+                      <div
+                        style="
+                          width: 160px;
+                          cursor: pointer;
+                          text-align: center;
+                        "
+                        class="montage_modal_list Montage2"
+                      >
+                        Montage 2
+                      </div>
+                    </li>
+                    <li role="presentation">
+                      <div
+                        style="
+                          width: 160px;
+                          cursor: pointer;
+                          text-align: center;
+                        "
+                        class="montage_modal_list Montage3"
+                      >
+                        Montage 3
+                      </div>
+                    </li>
+                    <li role="presentation">
+                      <div
+                        style="
+                          width: 160px;
+                          cursor: pointer;
+                          text-align: center;
+                        "
+                        class="montage_modal_list Montage4"
+                      >
+                        Montage 4
+                      </div>
+                    </li>
+                    <li role="presentation">
+                      <div
+                        style="
+                          width: 160px;
+                          cursor: pointer;
+                          text-align: center;
+                        "
+                        class="montage_modal_list Montage5"
+                      >
+                        Montage 5
+                      </div>
+                    </li>
+                    <li role="presentation">
+                      <div
+                        style="
+                          width: 160px;
+                          cursor: pointer;
+                          text-align: center;
+                        "
+                        class="montage_modal_list Montage6"
+                      >
+                        Montage 6
+                      </div>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+              <div class="col-sm-2"></div>
+            </div>
+            <hr />
+            <div class="row">
+              <div style="padding: 0px; margin: 0px; width: 155px; float: left">
+                <div
+                  style="
+                    border: groove 1px;
+                    overflow-y: auto;
+                    overflow-x: hidden;
+                    height: 360px;
+                    margin-left: 8px;
+                    margin-right: 8px;
+                  "
+                >
+                  <ul class="list-unstyled" id="channel_labels_one"></ul>
+                </div>
+              </div>
+              <div style="padding: 0px; margin: 0px; width: 155px; float: left">
+                <div
+                  class="channel2Group"
+                  style="
+                    border: groove 1px;
+                    overflow-y: auto;
+                    overflow-x: hidden;
+                    height: 360px;
+                    margin-left: 8px;
+                    margin-right: 8px;
+                  "
+                >
+                  <ul
+                    class="list-unstyled"
+                    id="channel_labels_two"
+                    style="padding: 0px"
+                  ></ul>
+                </div>
+              </div>
+              <div
+                id="montagbtngroup"
+                style="
+                  height: 360px;
+                  padding: 0px;
+                  width: 70px;
+                  float: left;
+                  margin: 0px;
+                "
+              >
+                <div
+                  class="sticky-top"
+                  style="
+                    position: sticky;
+                    top: 100px;
+                    z-index: 20;
+                    width: 70px;
+                    padding: 0px;
+                  "
+                >
+                  <div
+                    type="button"
+                    class="btn btn-info"
+                    style="margin-bottom: 30px; width: 70px"
+                    id="EEGMontage"
+                    data-toggle="tooltip"
+                    data-placement="bottom"
+                    title="Add selected channels to EEG tab"
+                  >
+                    EEG <span class="glyphicon glyphicon-chevron-right"> </span>
+                  </div>
+                  <div
+                    type="button"
+                    class="btn btn-success"
+                    style="margin-bottom: 30px; width: 70px"
+                    id="EKGMontage"
+                    data-toggle="tooltip"
+                    data-placement="bottom"
+                    title="Add selected channels to EKG tab"
+                  >
+                    EKG <span class="glyphicon glyphicon-chevron-right"> </span>
+                  </div>
+                  <div
+                    type="button"
+                    class="btn btn-warning"
+                    style="margin-bottom: 75px; width: 70px"
+                    id="OtherMontage"
+                    data-toggle="tooltip"
+                    data-placement="bottom"
+                    title="Add selected channel to other tab, you can get the value by move the cursor over the channel"
+                  >
+                    Other<span class="glyphicon glyphicon-chevron-right">
+                    </span>
+                  </div>
+                  <div
+                    class="btn btn-primary active"
+                    role="button"
+                    aria-pressed="false"
+                    style="margin-bottom: 30px; width: 70px"
+                    id="refrential"
+                    data-toggle="tooltip"
+                    data-placement="bottom"
+                    title="allow to select one channel only"
+                  >
+                    <span
+                      class="glyphicon glyphicon-unchecked"
+                      id="refrentialspan"
+                    ></span>
+                    Value
+                  </div>
+                  <div
+                    class="btn btn-info"
+                    role="button"
+                    aria-pressed="false"
+                    style="margin-bottom: 30px; width: 70px"
+                    id="invert"
+                    data-toggle="tooltip"
+                    data-placement="bottom"
+                    title="invert the signal of EEG channels only"
+                  >
+                    <span
+                      class="glyphicon glyphicon-unchecked"
+                      id="invertspan"
+                    ></span>
+                    Invert
+                  </div>
+                </div>
+              </div>
+              <div
+                style="
+                  margin-left: 0px;
+                  padding-left: 0px;
+                  padding-left: 5px;
+                  padding-right: 5px;
+                  height: 360px;
+                  width: 225px;
+                  float: left;
+                  overflow-y: auto;
+                  overflow-x: hidden;
+                "
+              >
+                <div style="border: groove #5bc0de 1px; padding: 0px">
+                  <ul
+                    class="montageSelectedList"
+                    id="montage_EEG_list"
+                    style="padding: 2px; margin: 0px"
+                  ></ul>
+                </div>
+                <div
+                  style="
+                    border: groove #5cb85c 1px;
+                    margin-top: 10px;
+                    padding: 0px;
+                  "
+                >
+                  <ul
+                    class="montageSelectedList"
+                    id="montage_EKG_list"
+                    style="padding: 2px; margin: 0px"
+                  ></ul>
+                </div>
+                <div
+                  style="
+                    border: groove #dba436 1px;
+                    margin-top: 10px;
+                    padding: 0px;
+                  "
+                >
+                  <ul
+                    class="montageSelectedList"
+                    id="montage_other_list"
+                    style="padding: 2px; margin: 0px"
+                  ></ul>
+                </div>
+              </div>
+              <div
+                id="montagbtngroup"
+                style="
+                  height: 360px;
+                  padding: 0px;
+                  width: 70px;
+                  float: left;
+                  margin: 0px;
+                "
+              >
+                <div
+                  class="sticky-top"
+                  style="
+                    position: sticky;
+                    top: 100px;
+                    z-index: 20;
+                    width: 70px;
+                    padding: 0px;
+                  "
+                >
+                  <div
+                    type="button"
+                    class="btn btn-info montageMoveBtn montageEditBtn"
+                    style="
+                      margin-top: 70px;
+                      margin-bottom: 30px;
+                      width: 70px;
+                      visibility: hidden;
+                    "
+                    id="UpMontage"
+                    data-toggle="tooltip"
+                    data-placement="bottom"
+                    title="Move selected channel one level up the montage segment"
+                  >
+                    <span class="glyphicon glyphicon-chevron-up"> </span>
+                  </div>
+                  <div
+                    type="button"
+                    class="btn btn-danger montageEditBtn"
+                    style="margin-bottom: 30px; width: 70px; visibility: hidden"
+                    id="delelteMontage"
+                    data-toggle="tooltip"
+                    data-placement="bottom"
+                    title="remove selected channel from the montage"
+                  >
+                    <span class="glyphicon glyphicon-remove"> </span>
+                  </div>
+                  <div
+                    type="button"
+                    class="btn btn-info montageMoveBtn montageEditBtn"
+                    style="margin-bottom: 30px; width: 70px; visibility: hidden"
+                    id="DownMontage"
+                    data-toggle="tooltip"
+                    data-placement="bottom"
+                    title="Move selected channel one level down the montage segment"
+                  >
+                    <span class="glyphicon glyphicon-chevron-down"> </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer" style="height: 40px; padding: 0px">
+              <div
+                type="button"
+                class="btn btn-primary"
+                id="LoadMontages"
+                style="margin: 10px"
+                onclick="loadoMntages()"
+              >
+                Load all montages <span class="glyphicon glyphicon-open"></span>
+              </div>
+              <div
+                type="button"
+                class="btn btn-primary"
+                id="SaveMontages"
+                style="margin: 10px"
+                onclick="saveMontages()"
+              >
+                Save all montages <span class="glyphicon glyphicon-save"></span>
+              </div>
+              <div
+                type="button"
+                class="btn btn-primary"
+                id="acceptMontage"
+                data-dismiss="modal"
+                style="margin: 10px; width: 70px"
+              >
+                Ok <span class="glyphicon glyphicon-ok"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal fade" id="aboutmodal">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 class="modal-title">About</h2>
+          </div>
+          <div class="modal-body">
+            <h3>EDF Viewer version 2.1</h3>
+            <h5>
+              <a href="../EDFViewer_V1/EDFViewer_V1.html"
+                >version 1 is available here</a
+              >
+            </h5>
+            <h3>This work was created by<strong> Bilal Zonjy, MD</strong></h3>
+            <br />
+            <div class="row">
+              <div class="col-sm-6">
+                <h4>Email: bxz142@case.edu</h4>
+              </div>
+              <div class="col-sm-6" style="padding-top: 10px">
+                <a rel="github" href="https://github.com/BilalZonjy/EDFViewer"
+                  ><img
+                    alt="github"
+                    style="border-width: 0; height: 40px; width: 60px"
+                    src="images/GitHub.png"
+                /></a>
+              </div>
+            </div>
+            <br />
+            <div style="font-size: 120%">
+              Special thanks to:<br /><span style="padding-left: 5px"
+                >James McDonald PhD candidate.</span
+              >
+              <br /><span style="padding-left: 5px">Farhad Kaffashi PhD.</span
+              ><br /><span style="padding-left: 5px"
+                >Wanchat Theeranaew PhD.</span
+              >
+            </div>
+            <br />
+            <div class="row">
+              <div class="col-sm-2" style="padding-top: 3px">
+                <a
+                  rel="license"
+                  href="http://creativecommons.org/licenses/by-nc-sa/4.0/"
+                  ><img
+                    alt="Creative Commons License"
+                    style="border-width: 0"
+                    src="images/creativecommons.png"
+                /></a>
+              </div>
+              <div class="col-sm-10">
+                This work is licensed under a
+                <a
+                  rel="license"
+                  href="http://creativecommons.org/licenses/by-nc-nd/4.0/"
+                  >Creative Commons Attribution-NonCommercial-NoDerivatives 4.0
+                  International License</a
+                >
+              </div>
+            </div>
+            <div class="modal-footer">
+              <div type="button" class="btn btn-primary" data-dismiss="modal">
+                Close
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal fade" id="jumptomodal">
+      <div class="modal-dialog" role="document" style="width: 420px">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>Jump to</h3>
+          </div>
+          <div class="modal-body">
+            <div class="panel with-nav-tabs panel-success">
+              <div class="panel-heading">
+                <ul class="nav nav-tabs">
+                  <li class="active">
+                    <a href="#ClockTimeTab" data-toggle="tab" id="ClockTimeli"
+                      ><span> Clock Time</span></a
+                    >
+                  </li>
+                  <li>
+                    <a
+                      href="#ElapsTimeHHmmssTab"
+                      data-toggle="tab"
+                      id="ElapsTimeli"
+                      ><span>Elapsed Time<br />(HH:mm:ss)</span></a
+                    >
+                  </li>
+                  <li>
+                    <a
+                      href="#ElapsTimesecondsTab"
+                      data-toggle="tab"
+                      id="Elapssecondsli"
+                      ><span>Elapsed Time<br />(seconds)</span></a
+                    >
+                  </li>
+                </ul>
+              </div>
+              <div class="panel-body">
+                <div class="tab-content">
+                  <div class="tab-pane fade in active" id="ClockTimeTab">
+                    <div class="row" style="width: 365px; padding-left: 14px">
+                      <div
+                        class="col-sm-6"
+                        style="margin: 0px; padding: 0px; padding-left: 1px"
+                      >
+                        <div
+                          style="
+                            border: 2px solid #c3c3c3;
+                            padding: 0px;
+                            margin: 0px;
+                            width: 142px;
+                            border-radius: 5px;
+                            padding-left: 2px;
+                          "
+                        >
+                          <input
+                            type="number"
+                            pattern="[0-9]*"
+                            placeholder="HH"
+                            step="1"
+                            min="0"
+                            max="23"
+                            style="
+                              width: 2em;
+                              width: 35px;
+                              height: 36px;
+                              border: 0px;
+                              text-align: right;
+                            "
+                            id="HH_Clock"
+                            class="HH"
+                          />
+                          :
+                          <input
+                            type="number"
+                            pattern="[0-9]*"
+                            placeholder="mm"
+                            step="1"
+                            min="0"
+                            max="59"
+                            style="
+                              width: 2em;
+                              width: 40px;
+                              height: 36px;
+                              border: 0px;
+                              text-align: right;
+                            "
+                            id="mm_Clock"
+                            class="60"
+                          />
+                          :
+                          <input
+                            type="number"
+                            pattern="[0-9]*"
+                            placeholder="ss"
+                            step="1"
+                            min="0"
+                            max="59"
+                            style="
+                              width: 2em;
+                              width: 35px;
+                              height: 36px;
+                              border: 0px;
+                              text-align: right;
+                            "
+                            id="ss_Clock"
+                            class="60"
+                          />
+                        </div>
+                      </div>
+                      <div
+                        class="col-sm-6"
+                        style="margin-left: 0px; padding-left: 0px"
+                      >
+                        <input
+                          class="form-control"
+                          name="registration_date"
+                          id="date_Clock"
+                          type="date"
+                          style="height: 40px; border: 2px solid #c3c3c3"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div class="tab-pane fade" id="ElapsTimeHHmmssTab">
+                    <div class="row" style="width: 365px; padding-left: 15px">
+                      <div
+                        class="col-sm-6"
+                        style="margin: 0px; padding: 0px; padding-left: 1px"
+                      >
+                        <div
+                          style="
+                            border: 2px solid #c3c3c3;
+                            padding: 0px;
+                            margin: 0px;
+                            width: 142px;
+                            border-radius: 5px;
+                            padding-left: 2px;
+                          "
+                        >
+                          <input
+                            type="number"
+                            placeholder="HH"
+                            step="1"
+                            min="0"
+                            max="23"
+                            style="
+                              width: 2em;
+                              width: 35px;
+                              height: 36px;
+                              border: 0px;
+                              text-align: right;
+                            "
+                            id="HH_Elaps"
+                            pattern="[0-9]*"
+                          />
+                          :
+                          <input
+                            type="number"
+                            pattern="[0-9]*"
+                            placeholder="mm"
+                            step="1"
+                            min="0"
+                            max="59"
+                            style="
+                              width: 2em;
+                              width: 40px;
+                              height: 36px;
+                              border: 0px;
+                              text-align: right;
+                            "
+                            id="mm_Elaps"
+                            class="60"
+                          />
+                          :
+                          <input
+                            type="number"
+                            pattern="[0-9]*"
+                            placeholder="ss"
+                            step="1"
+                            min="0"
+                            max="59"
+                            style="
+                              width: 2em;
+                              width: 35px;
+                              height: 36px;
+                              border: 0px;
+                              text-align: right;
+                            "
+                            id="ss_Elaps"
+                            class="60"
+                          />
+                        </div>
+                      </div>
+                      <div
+                        class="col-sm-6"
+                        style="margin-left: 0px; padding-left: 0px"
+                      ></div>
+                    </div>
+                  </div>
+                  <div class="tab-pane fade" id="ElapsTimesecondsTab">
+                    <div class="row" style="width: 365px; padding-left: 15px">
+                      <div
+                        class="col-sm-6"
+                        style="margin: 0px; padding: 0px; padding-left: 1px"
+                      >
+                        <div
+                          style="
+                            border: 2px solid #c3c3c3;
+                            padding: 0px;
+                            margin: 0px;
+                            width: 142px;
+                            border-radius: 5px;
+                          "
+                        >
+                          <input
+                            type="number"
+                            placeholder="seconds"
+                            step="1"
+                            min="0"
+                            max="3600"
+                            style="
+                              width: 130px;
+                              height: 36px;
+                              border: 0px;
+                              text-align: right;
+                            "
+                            id="seconds_Elaps"
+                            class="seconds"
+                          />
+                        </div>
+                      </div>
+                      <div
+                        class="col-sm-6"
+                        style="margin-left: 0px; padding-left: 0px"
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div
+              type="button"
+              class="btn btn-primary"
+              id="GO"
+              style="position: relative; left: 30px; width: 100px"
+            >
+              Go To
+            </div>
+            <div
+              type="button"
+              class="btn btn-primary"
+              data-dismiss="modal"
+              style="position: relative; left: 30%; width: 100px"
+            >
+              Close
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="annotationModal">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 class="modal-title">Confirm Annotation</h2>
+          </div>
+          <div class="modal-body">
+            <div>
+              <h4>Number of channels: <span id="channelCountSpan"></span></h4>
+              <h4>Channel names:</h4>
+              <div id="channelNamesDiv" style="margin-bottom: 20px;"></div>
+              
+              <h4>Select annotation type:</h4>
+              <div class="radio">
+                <label>
+                  <input type="radio" name="annotationType" value="normal" checked>
+                  Normal
+                </label>
+              </div>
+              <div class="radio">
+                <label>
+                  <input type="radio" name="annotationType" value="abnormal">
+                  Abnormal
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-primary" id="saveAnnotation">Save</button>
+            <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="text/javascript" src="js/jquery.js"></script>
+    <script type="text/javascript" src="js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="js/moment.min.js"></script>
+    <script type="text/javascript" src="js/plotly.min.js"></script>
+    <script type="text/javascript" src="js/CaseEEGFilter.js"></script>
+    <script type="text/javascript" src="js/app.js"></script>
+    <script>
+      // ─────────────────────────────────────────────────────────────
+      // CONFIGURATION
+      // ─────────────────────────────────────────────────────────────
+      const MIN_BOX_SIZE = 50;  // Minimum box size in pixels
+      const MAX_BOX_SIZE = 200; // Maximum box size in pixels
+      const BOX_SIZE_STEP = 25; // Step size for trying different box sizes
+      const MAX_HISTORY = 1000; // max number of gaze points to keep
+      const TIME_DECAY_FACTOR = 2000; // Controls how quickly older points lose weight (in ms)
+      const STABILIZATION_DELAY = 500; // ms to wait for stabilization before allowing selection
+      // ─────────────────────────────────────────────────────────────
+
+      const container = document.getElementById("mycont");
+      const canvas = document.getElementById("gazeCanvas");
+      const ctx = canvas.getContext("2d");
+
+      // When true, we have drawn a rectangle and are waiting for OK/Cancel
+      let isBoxDrawn = false;
+      // Stores the {x,y,width,height,count} of the currently drawn box
+      let currentBox = null;
+      // The list of incoming gaze points: { x: px, y: px, t: timestamp }
+      const history = [];
+      // Track stabilization state
+      let isStabilized = false;
+      let stabilizationTimer = null;
+      let lastStablePoint = null;
+
+      // Resize the canvas so it always matches its container
+      function resizeCanvasToContainer() {
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+      }
+      window.addEventListener("resize", resizeCanvasToContainer);
+      resizeCanvasToContainer();
+
+      // Calculate stability score based on recent points
+      function calculateStabilityScore(points, timeWindow) {
+        if (points.length < 2) return 1;
+        
+        const recentPoints = points.filter(p => Date.now() - p.t < timeWindow);
+        if (recentPoints.length < 2) return 1;
+
+        // Calculate variance of positions
+        let sumX = 0, sumY = 0;
+        recentPoints.forEach(p => {
+          sumX += p.x;
+          sumY += p.y;
+        });
+        const avgX = sumX / recentPoints.length;
+        const avgY = sumY / recentPoints.length;
+
+        let varSum = 0;
+        recentPoints.forEach(p => {
+          const dx = p.x - avgX;
+          const dy = p.y - avgY;
+          varSum += dx * dx + dy * dy;
+        });
+        const variance = varSum / recentPoints.length;
+        
+        // Convert variance to a 0-1 score (lower variance = higher score)
+        const maxAllowedVariance = 100; // adjust this threshold as needed
+        return Math.max(0, Math.min(1, 1 - (variance / maxAllowedVariance)));
+      }
+
+      // Draw all historical points, then re-draw the box if one is active
+      function drawPoints() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const now = Date.now();
+
+        // Draw historical points with opacity based on age
+        history.forEach((pt) => {
+          const age = now - pt.t;
+          const opacity = Math.exp(-age / TIME_DECAY_FACTOR);
+          ctx.fillStyle = `rgba(0, 255, 0, ${opacity * 0.5})`;
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        // Draw newest point with stability indicator
+        if (history.length) {
+          const last = history[history.length - 1];
+          const stabilityScore = calculateStabilityScore(history, 500);
+          
+          // Outer circle (stability indicator)
+          const radius = 8;
+          ctx.beginPath();
+          ctx.arc(last.x, last.y, radius, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(255, ${Math.floor(255 * stabilityScore)}, 0, 0.9)`;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // Inner dot (current position)
+          ctx.beginPath();
+          ctx.arc(last.x, last.y, 4, 0, Math.PI * 2);
+          ctx.fillStyle = isStabilized ? 
+            "rgba(0, 255, 0, 0.9)" :  // Green when stabilized
+            "rgba(255, 165, 0, 0.9)"; // Orange when not stabilized
+          ctx.fill();
+        }
+
+        // Draw the current box if one is active
+        if (isBoxDrawn && currentBox) {
+          ctx.strokeStyle = "red";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(
+            currentBox.x,
+            currentBox.y,
+            currentBox.width,
+            currentBox.height
+          );
+
+          // Add size indicator
+          ctx.fillStyle = "red";
+          ctx.font = "12px Arial";
+          ctx.fillText(
+            `${Math.round(currentBox.width)}×${Math.round(currentBox.height)}px`,
+            currentBox.x + 5,
+            currentBox.y + 15
+          );
+        }
+      }
+
+      // Listen for incoming gaze data over WebSocket
+      const ws = new WebSocket(`ws://${location.host}`);
+      ws.addEventListener("message", (evt) => {
+        const { x, y, t } = JSON.parse(evt.data);
+        const cx = x * canvas.width;
+        const cy = y * canvas.height;
+        const now = t || Date.now();
+
+        // Add point to history
+        history.push({ x: cx, y: cy, t: now });
+        if (history.length > MAX_HISTORY) {
+          history.shift();
+        }
+
+        // Check stability
+        const stabilityScore = calculateStabilityScore(history, 500);
+        const isCurrentlyStable = stabilityScore > 0.8; // Adjust threshold as needed
+
+        if (isCurrentlyStable && !isStabilized) {
+          // Just became stable
+          if (stabilizationTimer === null) {
+            stabilizationTimer = setTimeout(() => {
+              isStabilized = true;
+              lastStablePoint = { x: cx, y: cy };
+            }, STABILIZATION_DELAY);
+          }
+        } else if (!isCurrentlyStable) {
+          // Lost stability
+          if (stabilizationTimer !== null) {
+            clearTimeout(stabilizationTimer);
+            stabilizationTimer = null;
+          }
+          isStabilized = false;
+          lastStablePoint = null;
+        }
+
+        // Always redraw
+        drawPoints();
+      });
+
+      // Find the optimal box size and position based on gaze point density and recency
+      function findDensestBox(points, maxBoxSize) {
+        if (!points.length) return null;
+
+        let bestBox = null;
+        let bestScore = 0;
+        const now = Date.now();
+
+        // Try different box sizes
+        for (let size = MIN_BOX_SIZE; size <= MAX_BOX_SIZE; size += BOX_SIZE_STEP) {
+          // Try each point as potential top-left corner
+          for (let i = 0; i < points.length; i++) {
+            const px = points[i].x;
+            const py = points[i].y;
+            const x0 = px;
+            const y0 = py;
+            const x1 = px + size;
+            const y1 = py + size;
+
+            let score = 0;
+            let weightSum = 0;
+
+            // Calculate weighted score for points in this box
+            for (let j = 0; j < points.length; j++) {
+              const point = points[j];
+              if (point.x >= x0 && point.x <= x1 && point.y >= y0 && point.y <= y1) {
+                // Calculate time-based weight (more recent points get higher weights)
+                const age = now - point.t;
+                const weight = Math.exp(-age / TIME_DECAY_FACTOR);
+                score += weight;
+                weightSum += weight;
+              }
+            }
+
+            // Normalize score by box area to prefer smaller boxes with same point density
+            const areaFactor = 1 / (size * size);
+            const normalizedScore = score * areaFactor;
+
+            if (normalizedScore > bestScore) {
+              bestScore = normalizedScore;
+              bestBox = {
+                x: x0,
+                y: y0,
+                width: size,
+                height: size,
+                count: weightSum,  // Store weighted count instead of raw count
+                score: normalizedScore
+              };
+            }
+          }
+        }
+
+        return bestBox;
+      }
+
+      // Store annotations for the current EDF file
+      let currentEdfFile = null;
+      let currentAnnotations = [];
+
+      // Function to save annotations to a JSON file
+      async function saveAnnotationsToFile() {
+        if (!currentEdfFile) return;
+        
+        const jsonFileName = currentEdfFile.replace('.edf', '_annotations.json');
+        
+        try {
+          const response = await fetch('/save-annotations', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              fileName: jsonFileName,
+              annotations: currentAnnotations
+            })
+          });
+          
+          if (!response.ok) {
+            throw new Error('Failed to save annotations');
+          }
+        } catch (error) {
+          console.error('Error saving annotations:', error);
+          alert('Failed to save annotations. Please try again.');
+        }
+      }
+
+      // Function to load existing annotations for an EDF file
+      async function loadAnnotations(edfFileName) {
+        try {
+          const jsonFileName = edfFileName.replace('.edf', '_annotations.json');
+          const response = await fetch(`/load-annotations?file=${encodeURIComponent(jsonFileName)}`);
+          
+          if (response.ok) {
+            currentAnnotations = await response.json();
+          } else {
+            currentAnnotations = [];
+          }
+        } catch (error) {
+          console.error('Error loading annotations:', error);
+          currentAnnotations = [];
+        }
+      }
+
+      // Update the file input handler to load annotations
+      document.getElementById('file-input').addEventListener('change', async function(e) {
+        const file = e.target.files[0];
+        if (file) {
+          currentEdfFile = file.name;
+          await loadAnnotations(currentEdfFile);
+        }
+      });
+
+      // Update the canvas click handler
+      canvas.addEventListener("click", () => {
+        if (isBoxDrawn) return;
+
+        const now = Date.now();
+        const RECENT_MS = 3000;
+        const cutoff = now - RECENT_MS;
+        const recent = history.filter((pt) => pt.t >= cutoff);
+        if (!recent.length) return;
+
+        const densest = findDensestBox(recent, MAX_BOX_SIZE);
+        if (!densest) return;
+
+        isBoxDrawn = true;
+        currentBox = densest;
+        drawPoints();
+
+        setTimeout(() => {
+          const canvasRect = canvas.getBoundingClientRect();
+          const boxLeft = canvasRect.left + densest.x;
+          const boxTop = canvasRect.top + densest.y;
+          const boxRight = boxLeft + densest.width;
+          const boxBottom = boxTop + densest.height;
+
+          const chArr = [];
+          document.querySelectorAll("div.ChDiv").forEach((div) => {
+            const rect = div.getBoundingClientRect();
+            if (rect.bottom >= boxTop && rect.top <= boxBottom) {
+              const nameSpan = div.querySelector("span");
+              const chName = nameSpan ? nameSpan.innerText.trim() : "(unknown)";
+              chArr.push(chName);
+            }
+          });
+
+          // Update modal content
+          document.getElementById('channelCountSpan').textContent = chArr.length;
+          document.getElementById('channelNamesDiv').textContent = chArr.join(', ');
+          
+          // Show modal
+          $('#annotationModal').modal('show');
+
+          // Handle save button click
+          document.getElementById('saveAnnotation').onclick = function() {
+            const annotationType = document.querySelector('input[name="annotationType"]:checked').value;
+            
+            // Create annotation object
+            const annotation = {
+              timestamp: Date.now(),
+              bbox: {
+                x: densest.x,
+                y: densest.y,
+                width: densest.width,
+                height: densest.height
+              },
+              channelCount: chArr.length,
+              channelNames: chArr,
+              type: annotationType
+            };
+
+            // Add to current annotations
+            currentAnnotations.push(annotation);
+            
+            // Save to file
+            saveAnnotationsToFile();
+
+            // Close modal and clean up
+            $('#annotationModal').modal('hide');
+            isBoxDrawn = false;
+            currentBox = null;
+            history.length = 0;
+            drawPoints();
+          };
+
+          // Handle modal close/cancel
+          $('#annotationModal').on('hidden.bs.modal', function () {
+            isBoxDrawn = false;
+            currentBox = null;
+            history.length = 0;
+            drawPoints();
+          });
+        }, 0);
+      });
+    </script>
+  </body>
+</html>

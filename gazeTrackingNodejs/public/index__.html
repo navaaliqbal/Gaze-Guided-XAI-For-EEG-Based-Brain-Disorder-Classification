@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gaze Visualization in a Div</title>
+    <style>
+      /* Make the container position:relative so child <canvas> can be positioned on top */
+      #gazeContainer {
+        position: relative;
+        width: 800px; /* or whatever width you need */
+        height: 600px; /* or whatever height you need */
+        border: 1px solid #aaa;
+        overflow: hidden;
+      }
+
+      /* The canvas sits absolutely at top-left of #gazeContainer */
+      #gazeCanvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 999; /* ensures it’s above any other elements in the same div */
+      }
+
+      /* Example background element inside the same container */
+      .background-element {
+        position: absolute;
+        width: 100px;
+        height: 100px;
+        background: rgba(0, 0, 255, 0.2);
+        top: 50px;
+        left: 200px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- This is your “one div” that contains both background elements and the gaze‐canvas -->
+    <div id="gazeContainer">
+      <!-- Example background divs -->
+      <div class="background-element"></div>
+      <div
+        class="background-element"
+        style="top: 300px; left: 400px; background: rgba(255, 0, 0, 0.2)"
+      ></div>
+
+      <!-- The canvas for drawing gaze points -->
+      <canvas id="gazeCanvas"></canvas>
+    </div>
+
+    <script>
+      const container = document.getElementById("gazeContainer");
+      const canvas = document.getElementById("gazeCanvas");
+      const ctx = canvas.getContext("2d");
+
+      // Resize canvas to exactly match the container’s dimensions
+      function resizeCanvasToContainer() {
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+      }
+      window.addEventListener("resize", resizeCanvasToContainer);
+      resizeCanvasToContainer();
+
+      // Open WebSocket (adjust URL as needed)
+      const ws = new WebSocket(`ws://${location.host}`);
+
+      // Store gaze‐point history (in container coordinates)
+      const history = [];
+      const maxHistory = 100;
+
+      ws.addEventListener("message", (evt) => {
+        // Expecting incoming data as { x: <0–1>, y: <0–1> } relative to container
+        const { x, y } = JSON.parse(evt.data);
+
+        // Map normalized (0–1) to container pixels
+        const cx = x * canvas.width;
+        const cy = y * canvas.height;
+
+        history.push({ x: cx, y: cy });
+        if (history.length > maxHistory) history.shift();
+        drawPoints();
+      });
+
+      function drawPoints() {
+        // Clear only inside this canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw historical gaze points as small green dots
+        ctx.fillStyle = "rgba(0, 255, 0, 0.5)";
+        history.forEach((pt) => {
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        // Draw the most recent gaze point as a larger red dot
+        if (history.length) {
+          const last = history[history.length - 1];
+          ctx.fillStyle = "rgba(255, 0, 0, 0.9)";
+          ctx.beginPath();
+          ctx.arc(last.x, last.y, 6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    </script>
+  </body>
+</html>
