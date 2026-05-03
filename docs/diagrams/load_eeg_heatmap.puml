@@ -1,0 +1,36 @@
+@startuml
+title Sequence: Load EEG + Heatmap
+actor User
+participant MainWindow
+participant EDFPlotCanvas
+participant pyedflib
+participant HeatmapProcessor as KDE
+participant JSONStorage as "Fixation JSON"
+
+User -> MainWindow: Open EEG + Heatmap (EDF path, JSON path)
+MainWindow -> EDFPlotCanvas: load_edf(file_path)
+activate EDFPlotCanvas
+EDFPlotCanvas -> pyedflib: open & read signals
+activate pyedflib
+pyedflib --> EDFPlotCanvas: labels, signals, sample_rate, duration
+deactivate pyedflib
+EDFPlotCanvas -> EDFPlotCanvas: set signals, labels, sample_rate
+EDFPlotCanvas -> EDFPlotCanvas: plot_current_window()
+
+MainWindow -> EDFPlotCanvas: load_heatmap(file_path)
+EDFPlotCanvas -> JSONStorage: open JSON
+activate JSONStorage
+JSONStorage --> EDFPlotCanvas: session/fixation objects
+deactivate JSONStorage
+EDFPlotCanvas -> EDFPlotCanvas: validate/normalize fixations (JSON Schema)
+EDFPlotCanvas -> KDE: create_heatmap_for_window(fixations, current_time)
+activate KDE
+KDE --> EDFPlotCanvas: heatmap image (array)
+deactivate KDE
+EDFPlotCanvas -> EDFPlotCanvas: overlay heatmap (ax.imshow)
+EDFPlotCanvas --> MainWindow: drawing complete
+deactivate EDFPlotCanvas
+
+note over EDFPlotCanvas: Errors (file/read/parse) -> show QMessageBox
+
+@enduml

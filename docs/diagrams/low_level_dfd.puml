@@ -1,0 +1,55 @@
+@startuml
+title Low-level DFD - Gaze+EEG Viewer
+actor User
+
+rectangle "UI: MainWindow (Session Controller)" as UI
+rectangle "Process: EDF Loader (pyedflib)" as EDFL
+rectangle "Process: Plot Renderer (EDFPlotCanvas)" as PR
+rectangle "Process: Heatmap Generator (KDE / Gaussian)" as HG
+rectangle "Process: Mask Renderer (off-screen)" as MR
+rectangle "Process: Gaze Capture Thread (Tobii / Sim)" as GC
+rectangle "Process: Speech Thread (Vosk)" as ST
+
+database "EDF files (.edf)" as EDFDS
+database "Session JSON / recordings" as SESS
+folder "np_data cache (.npy)" as NP
+folder "vosk-model (speech)" as VOSK
+
+User -> UI: Open EDF
+UI -> EDFL: load_edf(path)
+EDFL -> EDFDS: read file
+EDFL --> PR: signals[], labels[], sample_rate
+
+PR -> PR: slice signals by current_time/time_window
+PR -> PR: scale (amplitude_scale) & offset for each channel
+PR -> MR: make_channel_mask(start_idx,end_idx,visible_channels,offset_step)
+MR --> PR: mask_buffer (RGB numpy arr)
+
+GC --> UI: gaze(ts,x,y)
+UI -> PR: map gaze -> screen pixel -> lookup mask_buffer
+PR -> PR: decode pixel color -> channel index
+UI -> SESS: append gaze event (timestamp,coords,channel)
+
+ST --> UI: speech(word,start,end,conf)
+UI -> UI: align speech to gaze_history (timestamp matching)
+UI -> SESS: append speech event / annotations
+
+PR -> HG: request heatmap for window (fixations/gaze)
+HG -> HG: aggregate points -> grid -> KDE/gaussian_filter
+HG --> PR: heatmap image (2D array)
+PR -> UI: render (imshow overlay behind traces)
+
+PR -> NP: optionally read/write .npy cache
+UI -> VOSK: speech recognition uses model files
+
+note over GC
+  - Interacts with Tobii SDK via `tobii_research` wrappers
+  - Calibration produces transform matrix and sampling metadata
+end note
+
+note over PR
+  - make_channel_mask used for gaze->channel mapping
+  - mask buffer updated per redraw
+end note
+
+@enduml
